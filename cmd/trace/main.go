@@ -66,17 +66,28 @@ func main() {
 		}
 		log.Printf("new connection")
 		go func(conn net.Conn) {
-			var buf [1024]byte
+			var buf [4]byte
+			var data []byte
 			for {
-				// XXX length + data
-				n, err := conn.Read(buf[:])
+				// Read length.
+				_, err := conn.Read(buf[:])
 				if err != nil {
 					fmt.Printf("read failed: %s\n", err)
 					break
 				}
-				fmt.Printf("Data:\n%s", hex.Dump(buf[:n]))
+				l := int(tlv.BO.Uint32(buf[:]))
+				if l > len(data) {
+					data = make([]byte, l)
+				}
+				_, err = conn.Read(data[:l])
+				if err != nil {
+					fmt.Printf("read failed: %s\n", err)
+					break
+				}
 
-				r, err := tlv.Unmarshal(buf[:n])
+				fmt.Printf("Data:\n%s", hex.Dump(data[:l]))
+
+				r, err := tlv.Unmarshal(data[:l])
 				if err != nil {
 					fmt.Printf("Unmarshal failed: %v\n", err)
 					break

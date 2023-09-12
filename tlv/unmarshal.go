@@ -31,7 +31,7 @@ func (dec *decoder) readInt32() (int32, error) {
 	if err != nil {
 		return 0, err
 	}
-	return int32(bo.Uint32(buf[:])), nil
+	return int32(BO.Uint32(buf[:])), nil
 }
 
 func (dec *decoder) readInt64() (int64, error) {
@@ -41,7 +41,7 @@ func (dec *decoder) readInt64() (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return int64(bo.Uint64(buf[:])), nil
+	return int64(BO.Uint64(buf[:])), nil
 }
 
 func (dec *decoder) readString() (string, error) {
@@ -59,6 +59,47 @@ func (dec *decoder) readString() (string, error) {
 	return string(buf), nil
 }
 
+func (dec *decoder) readAttr(vt VType) (slog.Attr, error) {
+	key, err := dec.readString()
+	if err != nil {
+		return slog.Attr{}, err
+	}
+	switch vt {
+	case VTypeInt64:
+		i, err := dec.readInt64()
+		if err != nil {
+			return slog.Attr{}, err
+		}
+		return slog.Int64(key, i), nil
+
+	case VTypeGroup:
+		count, err := dec.readInt32()
+		if err != nil {
+			return slog.Attr{}, err
+		}
+		var attrs []interface{}
+		for i := 0; i < int(count); i++ {
+			t, vt, err := dec.readTag()
+			if err != nil {
+				return slog.Attr{}, err
+			}
+			if t != TypeAttr {
+				return slog.Attr{}, fmt.Errorf("invalid group attr %v", t)
+			}
+			attr, err := dec.readAttr(vt)
+			if err != nil {
+				return slog.Attr{}, err
+			}
+			attrs = append(attrs, attr)
+		}
+		return slog.Group(key, attrs...), nil
+
+	default:
+		return slog.Attr{}, fmt.Errorf("VType %v not implemented yet", vt)
+	}
+}
+
+// Unmarshal decodes a slog.Record from the data.
 func Unmarshal(data []byte) (r slog.Record, err error) {
 	dec := (*decoder)(bytes.NewBuffer(data))
 
@@ -85,7 +126,6 @@ func Unmarshal(data []byte) (r slog.Record, err error) {
 				return r, err
 			}
 			r.Message = str
-			fmt.Printf("r.Message: %v\n", str)
 
 		case TypeLevel:
 			i, err := dec.readInt32()
@@ -95,21 +135,11 @@ func Unmarshal(data []byte) (r slog.Record, err error) {
 			r.Level = slog.Level(i)
 
 		case TypeAttr:
-			key, err := dec.readString()
+			attr, err := dec.readAttr(vt)
 			if err != nil {
 				return r, err
 			}
-			switch vt {
-			case VTypeInt64:
-				i, err := dec.readInt64()
-				if err != nil {
-					return r, err
-				}
-				r.Add(slog.Int64(key, i))
-
-			default:
-				return r, fmt.Errorf("VType %v not implemented yet", vt)
-			}
+			r.Add(attr)
 
 		default:
 			return r, fmt.Errorf("Type %v not implemented yet", t)

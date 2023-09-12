@@ -21,14 +21,14 @@ func (enc *encoder) writeTag(t Type, vt VType) {
 func (enc *encoder) writeInt32(i int32) {
 	var buf [4]byte
 
-	bo.PutUint32(buf[:], uint32(i))
+	BO.PutUint32(buf[:], uint32(i))
 	(*bytes.Buffer)(enc).Write(buf[:])
 }
 
 func (enc *encoder) writeInt64(i int64) {
 	var buf [8]byte
 
-	bo.PutUint64(buf[:], uint64(i))
+	BO.PutUint64(buf[:], uint64(i))
 	(*bytes.Buffer)(enc).Write(buf[:])
 }
 
@@ -39,10 +39,41 @@ func (enc *encoder) writeString(s string) {
 	(*bytes.Buffer)(enc).Write(data)
 }
 
+func (enc *encoder) writeAttr(a slog.Attr) error {
+	// Resolve attributes.
+	a.Value = a.Value.Resolve()
+
+	// Ignore empty attributes.
+	if a.Equal(slog.Attr{}) {
+		return nil
+	}
+	switch a.Value.Kind() {
+	case slog.KindInt64:
+		enc.writeTag(TypeAttr, VTypeInt64)
+		enc.writeString(a.Key)
+		enc.writeInt64(a.Value.Int64())
+
+	case slog.KindGroup:
+		attrs := a.Value.Group()
+		enc.writeTag(TypeAttr, VTypeGroup)
+		enc.writeString(a.Key)
+		enc.writeInt32(int32(len(attrs)))
+
+		for i := 0; i < len(attrs); i++ {
+			enc.writeAttr(attrs[i])
+		}
+
+	default:
+		return fmt.Errorf("a.Value.Kind=%v not implemented yet", a.Value.Kind())
+	}
+	return nil
+}
+
 func (enc *encoder) Bytes() []byte {
 	return (*bytes.Buffer)(enc).Bytes()
 }
 
+// Marshal encodes a slog.Record into binary data.
 func Marshal(r slog.Record) ([]byte, error) {
 	enc := new(encoder)
 
@@ -57,27 +88,17 @@ func Marshal(r slog.Record) ([]byte, error) {
 		enc.writeInt64(r.Time.UnixNano())
 	}
 
-	empty := slog.Attr{}
-
+	var err error
 	r.Attrs(func(a slog.Attr) bool {
-		// Resolve attributes.
-		a.Value = a.Value.Resolve()
-
-		// Ignore empty attributes.
-		if a.Equal(empty) {
-			return true
-		}
-		switch a.Value.Kind() {
-		case slog.KindInt64:
-			enc.writeTag(TypeAttr, VTypeInt64)
-			enc.writeString(a.Key)
-			enc.writeInt64(a.Value.Int64())
-
-		default:
-			fmt.Printf("a.Value.Kind=%v not implemented yet\n", a.Value.Kind())
+		err = enc.writeAttr(a)
+		if err != nil {
+			return false
 		}
 		return true
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return enc.Bytes(), nil
 }

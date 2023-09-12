@@ -13,7 +13,8 @@ import (
 )
 
 var (
-	bo = binary.BigEndian
+	// BO defines the byte order used to marshal records.
+	BO = binary.BigEndian
 )
 
 // Type specifies value type.
@@ -21,6 +22,7 @@ var (
 //go:generate stringer -type=Type -trimprefix=Type
 type Type uint8
 
+// Serialization types.
 const (
 	TypeTime Type = iota
 	TypeMessage
@@ -34,6 +36,7 @@ const (
 //go:generate stringer -type=VType -trimprefix=VType
 type VType uint32
 
+// Value types.
 const (
 	VTypeAny VType = iota
 	VTypeBool

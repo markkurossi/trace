@@ -11,5 +11,13 @@
 
   ;; Handle log record.
   (define (handle-record r)
-    (display r) (newline))
+    (let ((message (assoc "message" r))
+          (level (assoc "level" r))
+          (time (assoc "time" r))
+          (attrs (assoc "attrs" r)))
+      (display message) (newline)
+      (display level) (newline)
+      (display time) (newline)
+      (display attrs) (newline)
+      ))
   )
