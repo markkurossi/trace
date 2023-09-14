@@ -7,15 +7,15 @@
 package main
 
 import (
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/markkurossi/scheme"
-	"github.com/markkurossi/trace/tlv"
+	"github.com/markkurossi/trace"
 )
 
 const (
@@ -25,6 +25,9 @@ const (
 var (
 	scm             *scheme.Scheme
 	scmHandleRecord scheme.Value
+	scmRedraw       scheme.Value
+
+	cSignal = make(chan os.Signal, 1)
 )
 
 func main() {
@@ -51,54 +54,66 @@ func main() {
 	if err != nil {
 		log.Fatalf("Init: %s", err)
 	}
-
-	os.RemoveAll(path)
-	listener, err := net.Listen("unix", path)
+	scmRedraw, err = scm.Global("redraw")
 	if err != nil {
-		log.Fatalf("failed to create listener: %s", err)
+		log.Fatalf("Init: %s", err)
+	}
+
+	terminalSize()
+	go signalHandler()
+	signal.Notify(cSignal, syscall.SIGWINCH)
+
+	server, err := trace.NewServer(path)
+	if err != nil {
+		log.Fatalf("failed to create server: %s", err)
 	}
 
 	for {
-		conn, err := listener.Accept()
+		conn, err := server.Accept()
 		if err != nil {
 			log.Printf("accept failed: %s", err)
 			continue
 		}
 		log.Printf("new connection")
-		go func(conn net.Conn) {
-			var buf [4]byte
-			var data []byte
-			for {
-				// Read length.
-				_, err := conn.Read(buf[:])
-				if err != nil {
-					fmt.Printf("read failed: %s\n", err)
-					break
+		go func(conn *trace.Connection) {
+			for msg := range conn.C {
+				if msg.Err != nil {
+					fmt.Printf("error: %s\n", msg.Err)
+					return
 				}
-				l := int(tlv.BO.Uint32(buf[:]))
-				if l > len(data) {
-					data = make([]byte, l)
-				}
-				_, err = conn.Read(data[:l])
-				if err != nil {
-					fmt.Printf("read failed: %s\n", err)
-					break
-				}
-
-				fmt.Printf("Data:\n%s", hex.Dump(data[:l]))
-
-				r, err := tlv.Unmarshal(data[:l])
-				if err != nil {
-					fmt.Printf("Unmarshal failed: %v\n", err)
-					break
-				}
-				err = handleRecord(r)
+				err := handleRecord(msg.R)
 				if err != nil {
 					fmt.Printf("handleRecord: %v\n", err)
-					break
+					return
 				}
 			}
 			conn.Close()
 		}(conn)
+	}
+}
+
+func terminalSize() {
+	rows, cols, err := Size()
+	if err != nil {
+		fmt.Printf("failed to get terminal size: %s\n", err)
+	} else {
+		scm.SetGlobal("rows", scheme.Int(rows))
+		scm.SetGlobal("cols", scheme.Int(cols))
+
+		_, err = scm.Apply(scmRedraw, nil)
+		if err != nil {
+			fmt.Printf("redraw: %s\n", err)
+		}
+	}
+}
+
+func signalHandler() {
+	for signal := range cSignal {
+		switch signal {
+		case syscall.SIGWINCH:
+			terminalSize()
+		default:
+			fmt.Printf("signal: %v\n", signal)
+		}
 	}
 }

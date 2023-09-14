@@ -8,7 +8,6 @@ package trace
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"net"
@@ -18,6 +17,21 @@ import (
 
 var (
 	_ slog.Handler = &Client{}
+)
+
+// Protocol constants.
+const (
+	Magic = 0x5a7e5041
+)
+
+// MsgType specifies trace protocol message types.
+//
+//go:generate stringer -type=MsgType -trimprefix=Msg
+type MsgType byte
+
+// Message types.
+const (
+	MsgSlog MsgType = iota
 )
 
 // Client implements trace client and slog.Handler.
@@ -30,6 +44,14 @@ type Client struct {
 func NewClient(path string) (*Client, error) {
 	conn, err := net.Dial("unix", path)
 	if err != nil {
+		return nil, err
+	}
+
+	var buf [4]byte
+	tlv.BO.PutUint32(buf[:], Magic)
+	_, err = conn.Write(buf[:])
+	if err != nil {
+		conn.Close()
 		return nil, err
 	}
 
@@ -50,11 +72,11 @@ func (c *Client) Handle(ctx context.Context, r slog.Record) error {
 		fmt.Printf("tlv.Marshal failed: %s\n", err)
 		return err
 	}
-	fmt.Printf("Data:\n%s", hex.Dump(data))
 
 	l := len(data)
-	var buf [4]byte
-	tlv.BO.PutUint32(buf[:], uint32(l))
+	var buf [5]byte
+	buf[0] = byte(MsgSlog)
+	tlv.BO.PutUint32(buf[1:], uint32(l))
 
 	_, err = c.conn.Write(buf[:])
 	if err != nil {
