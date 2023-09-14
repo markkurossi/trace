@@ -72,6 +72,13 @@ func (dec *decoder) readAttr(vt VType) (slog.Attr, error) {
 		}
 		return slog.Int64(key, i), nil
 
+	case VTypeUint64:
+		i, err := dec.readInt64()
+		if err != nil {
+			return slog.Attr{}, err
+		}
+		return slog.Uint64(key, uint64(i)), nil
+
 	case VTypeGroup:
 		count, err := dec.readInt32()
 		if err != nil {

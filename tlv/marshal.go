@@ -53,6 +53,11 @@ func (enc *encoder) writeAttr(a slog.Attr) error {
 		enc.writeString(a.Key)
 		enc.writeInt64(a.Value.Int64())
 
+	case slog.KindUint64:
+		enc.writeTag(TypeAttr, VTypeUint64)
+		enc.writeString(a.Key)
+		enc.writeInt64(int64(a.Value.Uint64()))
+
 	case slog.KindGroup:
 		attrs := a.Value.Group()
 		enc.writeTag(TypeAttr, VTypeGroup)
@@ -60,7 +65,9 @@ func (enc *encoder) writeAttr(a slog.Attr) error {
 		enc.writeInt32(int32(len(attrs)))
 
 		for i := 0; i < len(attrs); i++ {
-			enc.writeAttr(attrs[i])
+			if err := enc.writeAttr(attrs[i]); err != nil {
+				return err
+			}
 		}
 
 	default:

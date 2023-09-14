@@ -22,6 +22,9 @@ func attrToScheme(a slog.Attr) (scheme.Value, error) {
 	case slog.KindInt64:
 		return scheme.Int(a.Value.Int64()), nil
 
+	case slog.KindUint64:
+		return scheme.Int(a.Value.Uint64()), nil
+
 	case slog.KindGroup:
 		var ga scheme.Value
 		attrs := a.Value.Group()

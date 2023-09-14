@@ -21,8 +21,9 @@ func main() {
 	slog.SetDefault(slog.New(logger))
 
 	slog.Info("test", "a", 1, "b", 2)
-	slog.Info("step", "done", 1, slog.Group("gates",
-		"xor", 10,
-		"or", 20,
-		"not", 7))
+	slog.Info("progress", slog.Int("done", 43), slog.Int("total", 100),
+		slog.Group("gates",
+			slog.Uint64("xor", 10),
+			slog.Uint64("or", 20),
+			slog.Uint64("not", 7)))
 }
