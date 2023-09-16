@@ -16,10 +16,12 @@ import (
 	"github.com/markkurossi/trace/tlv"
 )
 
+// Server implements trace server.
 type Server struct {
 	listener net.Listener
 }
 
+// NewServer creates a new trace server.
 func NewServer(path string) (*Server, error) {
 	os.RemoveAll(path)
 	listener, err := net.Listen("unix", path)
@@ -31,6 +33,7 @@ func NewServer(path string) (*Server, error) {
 	}, nil
 }
 
+// Accept accepts a new client connection.
 func (s *Server) Accept() (*Connection, error) {
 	conn, err := s.listener.Accept()
 	if err != nil {
@@ -50,11 +53,13 @@ type msg struct {
 	R   slog.Record
 }
 
+// Connection implements a client connection.
 type Connection struct {
 	conn net.Conn
 	C    chan msg
 }
 
+// Close closes the client connection.
 func (c *Connection) Close() error {
 	return c.conn.Close()
 }
